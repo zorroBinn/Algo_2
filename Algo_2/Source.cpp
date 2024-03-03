@@ -5,21 +5,22 @@
 #include <cmath>
 #include <float.h>
 using namespace std;
-#define MAX_ITERATION 10000 //Максимальное кол-во итераций для методов
+#define MAX_ITERATION 50000 //Максимальное кол-во итераций для методов
 #define RAND_MAX_ABS 10 //Максимальное значение (по модулю) генерируемого числа
 
-void ArraySelecting(int size, double**& A_Matrix, double*& B, double*& X) {
+void ArraySelecting(int size, double**& A_Matrix, double*& B, double*& Xj, double*& Xs) {
     A_Matrix = new double* [size];
     for (int i = 0; i < size; i++) {
         A_Matrix[i] = new double[size];
     }
     B = new double[size];
-    X = new double[size];
+    Xj = new double[size];
+    Xs = new double[size];
 }
 
 void RandomMatrix(int size, double** A_Matrix, double* B) {
     srand(time(0));
-    int tmp = 0;
+    double tmp = 0;
     int sgn;
     for (int i = 0; i < size; i++) {
         B[i] = -RAND_MAX_ABS + rand() % (2 * RAND_MAX_ABS + 1);
@@ -36,65 +37,65 @@ void RandomMatrix(int size, double** A_Matrix, double* B) {
     }
 }
 
-void DiagonalPredominance(int size, double** A_Matrix) {
-
-
+double DiagonalPredominance(int size, double** A_Matrix, int row) {
+    double tmp = 0;
+    for (int j = 0; j < size; j++) {
+        if (j != row) tmp += fabs(A_Matrix[row][j]);
+    }
+    return fabs(A_Matrix[row][row] / tmp);
 }
 
-int JacobiMethod(int size, double eps, double** A_Matrix, double* B, double* X, int& numberOfIteration) {
-    double* TempX = new double[size];
-    double norm;
+double DiscrepanciesNorm(int size, double** A_Matrix, double* B, double* X) {
+    double* discrepancies = new double[size]; //Вектор невязок
+    double tmp = 0.0;
+    for (int i = 0; i < size; i++) {
+        discrepancies[i] = B[i];
+        for (int j = 0; j < size; j++) {
+            discrepancies[i] -= A_Matrix[i][j] * X[j];
+        }
+    }
+    for (int i = 0; i < size; i++) {
+        tmp += discrepancies[i] * discrepancies[i];
+    }
+    return sqrt(tmp);
+}
+
+int JacobiMethod(int size, double eps, double** A_Matrix, double* B, double* Xj, int& numberOfIteration) {
+    double* TempXj = new double[size];  
     do {
         for (int i = 0; i < size; i++) {
-            TempX[i] = B[i];
+            TempXj[i] = B[i];
             for (int j = 0; j < size; j++) {
-                if (i != j) TempX[i] -= A_Matrix[i][j] * X[j];
+                if (i != j) TempXj[i] -= A_Matrix[i][j] * Xj[j];
             }
-            TempX[i] /= A_Matrix[i][i];
+            TempXj[i] /= A_Matrix[i][i];
         }
-        norm = fabs(X[0] - TempX[0]);
         for (int i = 0; i < size; i++) {
-            if (fabs(X[i] - TempX[i]) > norm) norm = fabs(X[i] - TempX[i]);
-            X[i] = TempX[i];
+            Xj[i] = TempXj[i];
         }
         numberOfIteration++;
-        if (numberOfIteration > MAX_ITERATION) {
-            delete[] TempX;
-            return 1;
-        }
-    } while (norm > eps);
-    delete[] TempX;
+        if (numberOfIteration > MAX_ITERATION) return 1;
+    } while (DiscrepanciesNorm(size, A_Matrix, B, Xj) > eps);
+    delete[] TempXj;
     return 0;
 }
 
-int SeidelMethod(int size, double eps, double** A_Matrix, double* B, double* X, int& numberOfIteration) {
-    double* TempX = new double[size];
-    double norm;
+int SeidelMethod(int size, double eps, double** A_Matrix, double* B, double* Xs, int& numberOfIteration) {
     do {
         for (int i = 0; i < size; i++) {
-            TempX[i] = B[i];
+            double tmp = 0.0;
             for (int j = 0; j < size; j++) {
-                if (i > j) TempX[i] -= A_Matrix[i][j] * X[j];
-                else if (i < j) TempX[i] -= A_Matrix[i][j] * TempX[j];
+                if (i != j) tmp += A_Matrix[i][j] * Xs[j];
             }
-            TempX[i] /= A_Matrix[i][i];
-        }
-        norm = fabs(X[0] - TempX[0]);
-        for (int i = 0; i < size; i++) {
-            if (fabs(X[i] - TempX[i]) > norm) norm = fabs(X[i] - TempX[i]);
-            X[i] = TempX[i];
+            Xs[i] = (B[i] - tmp) / A_Matrix[i][i];
         }
         numberOfIteration++;
-        if (numberOfIteration > MAX_ITERATION) {
-            delete[] TempX;
-            return 1;
-        }
-    } while (norm > eps);
-    delete[] TempX;
+        if (numberOfIteration > MAX_ITERATION) return 1;
+    } while (DiscrepanciesNorm(size, A_Matrix, B, Xs) > eps);
     return 0;
 }
 
-void ReadingFromFile(int& size, double& eps, double& initialApproximation, double**& A_Matrix, double*& B, double*& X) {
+void ReadingFromFile(int& size, double& eps, double& initialApproximation, double**& A_Matrix, double*& B, double*& Xj, double*& Xs) {
     char temp; //Переменная для проверки файла
     //Чтение из файла
     try {
@@ -117,7 +118,7 @@ void ReadingFromFile(int& size, double& eps, double& initialApproximation, doubl
 
         fin >> initialApproximation; //Чтение начального приближения
 
-        ArraySelecting(size, A_Matrix, B, X);
+        ArraySelecting(size, A_Matrix, B, Xj, Xs);
 
         //Чтение матрицы коэффициентов
         for (int i = 0; i < size; i++) {
@@ -150,14 +151,14 @@ void ReadingFromFile(int& size, double& eps, double& initialApproximation, doubl
     }
 }
 
-void WritingToFile(int size, double& eps, double** A_Matrix, double* B, double* X) {
+void WritingToFile(int size, double eps, double init, double** A_Matrix, double* B, double* Xj, double* Xs) {
     try {
         ofstream fout("output.txt");
         if (!fout.is_open()) { // Проверяем, удалось ли открыть файл
             throw string("Ошибка при создании файла output.txt, результаты не могут быть записаны");
         }
 
-        fout << "Исходная матрица коэффициентов: " << endl;
+        fout << "Матрица коэффициентов: " << endl;
         for (int i = 0; i < size; i++) {
             for (int j = 0; j < size; j++) {
                 fout << A_Matrix[i][j];
@@ -165,12 +166,21 @@ void WritingToFile(int size, double& eps, double** A_Matrix, double* B, double* 
             fout << endl;
         }
 
-        fout << endl << "Исходная матрица свободных членов:" << endl;
+        fout << endl << "Столбец свободных членов:" << endl;
         for (int i = 0; i < size; i++) {
             fout << B[i] << endl;
         }
 
-        fout << endl << "Заданная точность e = " << eps << endl;
+        fout << endl << "Коэффициенты диагонального преобладания:" << endl;
+        for (int i = 0; i < size; i++) {
+            fout << DiagonalPredominance(size, A_Matrix, i) << " ";
+        }
+
+        fout << endl << "Заданная точность e: " << eps << endl;
+
+        fout << endl << "Начальное приближение: " << init << endl;
+
+
 
         cout << endl << "Программа успешно завершена. Результаты записаны в файл output.txt" << endl;
     }
@@ -183,10 +193,13 @@ int main() {
     SetConsoleCP(1251);
     SetConsoleOutputCP(1251);
     double** A_Matrix; //Двумерный массив для работы с матрицей коэффициентов
-    double* B; //Двумерный массив для работы с матрицей свободных членов
-    double* X; //Двумерный массив для решений системы
+    double* B; //Массив для работы с матрицей свободных членов
+    double* Xj; //Vассив для решений системы методом Якоби
+    double* Xs; //Vассив для решений системы методом Зейделя
     int size; //Переменная - размерность матрицы коэффициентов
     double eps; //Точность
+    
+    double discrepanciesNorm; //Норма невязок
     double initialApproximation; //Начальное приближение
     int numberOfIteration = 0; //Кол-во итераций
     string IsRandom, method;
@@ -210,7 +223,7 @@ int main() {
         cout << "Введите начальное приближение: ";
         cin >> initialApproximation;
         
-        ArraySelecting(size, A_Matrix, B, X);
+        ArraySelecting(size, A_Matrix, B, Xj, Xs);
         RandomMatrix(size, A_Matrix, B);
 
         cout << "Сгенгерированная матрица А:" << endl;
@@ -226,50 +239,46 @@ int main() {
         }
 
         for (int i = 0; i < size; i++) {
-            X[i] = initialApproximation;
+            Xj[i] = initialApproximation;
         }
 
         try {
             cout << endl << "Решение методом Якоби:" << endl;
-            if (JacobiMethod(size, eps, A_Matrix, B, X, numberOfIteration) == 1) {
-                throw string("Превышен максимум итераций метода Якоби (10000), нет схождения");
+            if (JacobiMethod(size, eps, A_Matrix, B, Xj, numberOfIteration) == 1) {
+                throw string("Превышен максимум итераций метода Якоби (50000), нет схождения");
             }
             for (int i = 0; i < size; i++) {
-                cout << X[i] << endl;
+                cout << Xj[i] << endl;
             }
             cout << "Число итераций: " << numberOfIteration;
         }
         catch (string err_message) {
             cerr << err_message << endl;
-            _getch();
-            exit(1);
         }
 
         numberOfIteration = 0;
         for (int i = 0; i < size; i++) {
-            X[i] = initialApproximation;
+            Xs[i] = initialApproximation;
         }
 
         try {
             cout << endl << "Решение методом Зейделя:" << endl;
-            if (SeidelMethod(size, eps, A_Matrix, B, X, numberOfIteration) == 1) {
-                throw string("Превышен максимум итераций метода Зейделя (10000), нет схождения");
+            if (SeidelMethod(size, eps, A_Matrix, B, Xs, numberOfIteration) == 1) {
+                throw string("Превышен максимум итераций метода Зейделя (50000), нет схождения");
             }
             for (int i = 0; i < size; i++) {
-                cout << X[i] << endl;
+                cout << Xs[i] << endl;
             }
             cout << "Число итераций: " << numberOfIteration;
         }
         catch (string err_message) {
             cerr << err_message << endl;
-            _getch();
-            exit(1);
         }
     }
     
     if (IsRandom == "2") {
         
-        ReadingFromFile(size, eps, initialApproximation, A_Matrix, B, X);
+        ReadingFromFile(size, eps, initialApproximation, A_Matrix, B, Xj, Xs);
         
         cout << "Матрица А:" << endl;
         for (int i = 0; i < size; i++) {
@@ -285,17 +294,18 @@ int main() {
         cout << endl << "Точность:" << eps <<  endl;
         cout << "Начальное приближение: " << initialApproximation << endl;
 
+        cout << endl;
         for (int i = 0; i < size; i++) {
-            X[i] = initialApproximation;
+            Xj[i] = initialApproximation;
         }
 
         try {
             cout << endl << "Решение методом Якоби:" << endl;
-            if (JacobiMethod(size, eps, A_Matrix, B, X, numberOfIteration) == 1) {
-                throw string("Превышен максимум итераций метода Якоби (10000), нет схождения");
+            if (JacobiMethod(size, eps, A_Matrix, B, Xj, numberOfIteration) == 1) {
+                throw string("Превышен максимум итераций метода Якоби (50000), нет схождения");
             }
             for (int i = 0; i < size; i++) {
-                cout << X[i] << endl;
+                cout << Xj[i] << endl;
             }
             cout << "Число итераций: " << numberOfIteration;
         }
@@ -305,16 +315,16 @@ int main() {
 
         numberOfIteration = 0;
         for (int i = 0; i < size; i++) {
-            X[i] = initialApproximation;
+            Xs[i] = initialApproximation;
         }
 
         try {
             cout << endl << "Решение методом Зейделя:" << endl;
-            if (SeidelMethod(size, eps, A_Matrix, B, X, numberOfIteration) == 1) {
-                throw string("Превышен максимум итераций метода Якоби (10000), нет схождения");
+            if (SeidelMethod(size, eps, A_Matrix, B, Xs, numberOfIteration) == 1) {
+                throw string("Превышен максимум итераций метода Зейделя (50000), нет схождения");
             }
             for (int i = 0; i < size; i++) {
-                cout << X[i] << endl;
+                cout << Xs[i] << endl;
             }
             cout << "Число итераций: " << numberOfIteration;
         }
