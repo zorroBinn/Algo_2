@@ -4,6 +4,7 @@
 #include <Windows.h>
 #include <cmath>
 #include <float.h>
+#include <iomanip>
 using namespace std;
 #define MAX_ITERATION 50000 //Максимальное кол-во итераций для методов
 #define RAND_MAX_ABS 10 //Максимальное значение (по модулю) генерируемого числа
@@ -110,7 +111,7 @@ void ReadingFromFile(int& size, double& eps, double& initialApproximation, doubl
             throw string("Проблема с данными в файле");
         }
 
-        fin >> eps; //Чтение размерности матрицы 
+        fin >> eps; //Чтение погрешности 
 
         if (eps <= 0) { //Если не число или не положительное - вызов исключения
             throw string("Проблема с данными в файле");
@@ -151,7 +152,46 @@ void ReadingFromFile(int& size, double& eps, double& initialApproximation, doubl
     }
 }
 
-void WritingToFile(int size, double eps, double init, double** A_Matrix, double* B, double* Xj, double* Xs) {
+int ZeroOnDiagonal(int size, double** A_Matrix, double* B) {
+    bool IsZeroOnDiagonal = false;
+    for (int i = 0; i < size; i++) {
+        if (fabs(A_Matrix[i][i]) < DBL_EPSILON) IsZeroOnDiagonal = true;
+    }
+    if (!IsZeroOnDiagonal) {
+        return 0;
+    }
+    else {
+        int index_max; //Индекс строки с максимальным элементом в столбце под глав. диаг.
+        double max; //Максимальный элемент в столбце под глав. диаг.
+        double tmp;
+        for (int k = 0; k < size; k++) { //Рассматриваемый столбец матрицы коэффициентов
+            index_max = k;
+            max = A_Matrix[k][k]; //Изначально задаём максимальный элемент - элемент глав. диаг.
+            if (fabs(max) < DBL_EPSILON) {
+                //Просматриваем столбец вниз под глав. диаг.
+                for (int i = k + 1; i < size; i++) {
+                    if (fabs(A_Matrix[i][k]) > fabs(max)) { //Если находим число больше по модулю - назначаем его максимальным элементом
+                        max = A_Matrix[i][k];
+                        index_max = i;
+                    }
+                }
+                //Из-за погрешности машинного вычисления с плавающей точкой, проверяем максимальный элемент на double_epsilon: 1.0 + DLB_EPSILON != 1.0
+                //Если этот элемент меньше - назначаем его равным 0
+                //Т.к. этот элемент максимальный в столбце под глав. диаг. (включая элемент глав. диаг.), то det(A) = 0 и однозначно невозможно найти корни СЛАУ
+                if (fabs(max) < DBL_EPSILON) {
+                    return 1;
+                }
+                //Если главный элемент столбца стоит ниже глав. диаг. - перестановка строк так, чтобы он стоял на глав. диаг.
+                if (index_max != k) {
+                    swap(A_Matrix[k], A_Matrix[index_max]);
+                    swap(B[k], B[index_max]);
+                }
+            }
+        }
+    }
+}
+
+void WritingToFile(int size, double eps, double** A_Matrix, double* B, double* Xj, double* Xs, double initialApproximation, int& numberOfIteration) {
     try {
         ofstream fout("output.txt");
         if (!fout.is_open()) { // Проверяем, удалось ли открыть файл
@@ -161,7 +201,7 @@ void WritingToFile(int size, double eps, double init, double** A_Matrix, double*
         fout << "Матрица коэффициентов: " << endl;
         for (int i = 0; i < size; i++) {
             for (int j = 0; j < size; j++) {
-                fout << A_Matrix[i][j];
+                fout << A_Matrix[i][j] << "\t";
             }
             fout << endl;
         }
@@ -173,15 +213,48 @@ void WritingToFile(int size, double eps, double init, double** A_Matrix, double*
 
         fout << endl << "Коэффициенты диагонального преобладания:" << endl;
         for (int i = 0; i < size; i++) {
-            fout << DiagonalPredominance(size, A_Matrix, i) << " ";
+            fout << setprecision(3) << DiagonalPredominance(size, A_Matrix, i) << " ";
+        }
+        fout << setprecision(5);
+
+        fout << endl << "Заданная погрешность e: " << eps << endl;
+
+        fout << "Начальное приближение: " << initialApproximation << endl;
+
+        for (int i = 0; i < size; i++) {
+            Xj[i] = initialApproximation;
         }
 
-        fout << endl << "Заданная точность e: " << eps << endl;
+        fout << endl << "Решение методом Якоби:" << endl;
+        if (JacobiMethod(size, eps, A_Matrix, B, Xj, numberOfIteration) == 1) {
+            fout << "Превышен максимум итераций метода Якоби (50000), нет схождения";
+        }
+        else {
+            for (int i = 0; i < size; i++) {
+                fout << Xj[i] << endl;
+            }
+            fout << "Число итераций метода Якоби:: " << numberOfIteration << endl;
+            fout << "Норма невязок: " << DiscrepanciesNorm(size, A_Matrix, B, Xj);
+        }
 
-        fout << endl << "Начальное приближение: " << init << endl;
+        numberOfIteration = 0;
+        for (int i = 0; i < size; i++) {
+            Xs[i] = initialApproximation;
+        }
 
+        fout << endl << "Решение методом Зейделя:" << endl;
+        if (SeidelMethod(size, eps, A_Matrix, B, Xs, numberOfIteration) == 1) {
+            fout << "Превышен максимум итераций метода Зейделя (50000), нет схождения";
+        }
+        else {
+            for (int i = 0; i < size; i++) {
+                fout << Xs[i] << endl;
+            }
+            fout << "Число итераций: " << numberOfIteration << endl;
+            fout << "Норма невязок: " << DiscrepanciesNorm(size, A_Matrix, B, Xs);
+        }
 
-
+        fout.close();
         cout << endl << "Программа успешно завершена. Результаты записаны в файл output.txt" << endl;
     }
     catch (string err_message) {
@@ -197,9 +270,7 @@ int main() {
     double* Xj; //Vассив для решений системы методом Якоби
     double* Xs; //Vассив для решений системы методом Зейделя
     int size; //Переменная - размерность матрицы коэффициентов
-    double eps; //Точность
-    
-    double discrepanciesNorm; //Норма невязок
+    double eps; //Погрешность
     double initialApproximation; //Начальное приближение
     int numberOfIteration = 0; //Кол-во итераций
     string IsRandom, method;
@@ -217,7 +288,7 @@ int main() {
             cin >> size;
         } while (size < 2);
         do {
-            cout << "Введите точность e: ";
+            cout << "Введите погрешность e: ";
             cin >> eps;
         } while (eps <= 0);
         cout << "Введите начальное приближение: ";
@@ -225,8 +296,11 @@ int main() {
         
         ArraySelecting(size, A_Matrix, B, Xj, Xs);
         RandomMatrix(size, A_Matrix, B);
-
-        cout << "Сгенгерированная матрица А:" << endl;
+        if (ZeroOnDiagonal(size, A_Matrix, B) == 1) {
+            cout << "Невозможно получить решение, т.к. в исходной матрице коэффициентов есть нулевой столбец";
+        }
+        else WritingToFile(size, eps, A_Matrix, B, Xj, Xs, initialApproximation, numberOfIteration);
+        /*cout << "Сгенгерированная матрица А:" << endl;
         for (int i = 0; i < size; i++) {
             for (int j = 0; j < size; j++) {
                 cout << A_Matrix[i][j] << " ";
@@ -273,14 +347,16 @@ int main() {
         }
         catch (string err_message) {
             cerr << err_message << endl;
-        }
+        }*/
     }
     
     if (IsRandom == "2") {
-        
         ReadingFromFile(size, eps, initialApproximation, A_Matrix, B, Xj, Xs);
-        
-        cout << "Матрица А:" << endl;
+        if (ZeroOnDiagonal(size, A_Matrix, B) == 1) {
+            cout << "Невозможно получить решение, т.к. в исходной матрице коэффициентов есть нулевой столбец";
+        }
+        else WritingToFile(size, eps, A_Matrix, B, Xj, Xs, initialApproximation, numberOfIteration);
+        /*cout << "Матрица А:" << endl;
         for (int i = 0; i < size; i++) {
             for (int j = 0; j < size; j++) {
                 cout << A_Matrix[i][j] << " ";
@@ -330,7 +406,7 @@ int main() {
         }
         catch (string err_message) {
             cerr << err_message << endl;
-        }
+        }*/
     }
 
     _getch();
