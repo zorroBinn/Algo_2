@@ -6,7 +6,7 @@
 #include <float.h>
 #include <iomanip>
 using namespace std;
-#define MAX_ITERATION 50000 //Максимальное кол-во итераций для методов
+#define MAX_ITERATION 10000 //Максимальное кол-во итераций для методов
 #define RAND_MAX_ABS 10 //Максимальное значение (по модулю) генерируемого числа
 
 void ArraySelecting(int size, double**& A_Matrix, double*& B, double*& Xj, double*& Xs) {
@@ -152,42 +152,9 @@ void ReadingFromFile(int& size, double& eps, double& initialApproximation, doubl
     }
 }
 
-int ZeroOnDiagonal(int size, double** A_Matrix, double* B) {
-    bool IsZeroOnDiagonal = false;
+int ZeroOnDiagonal(int size, double**& A_Matrix, double*& B) {
     for (int i = 0; i < size; i++) {
-        if (fabs(A_Matrix[i][i]) < DBL_EPSILON) IsZeroOnDiagonal = true;
-    }
-    if (!IsZeroOnDiagonal) {
-        return 0;
-    }
-    else {
-        int index_max; //Индекс строки с максимальным элементом в столбце под глав. диаг.
-        double max; //Максимальный элемент в столбце под глав. диаг.
-        double tmp;
-        for (int k = 0; k < size; k++) { //Рассматриваемый столбец матрицы коэффициентов
-            index_max = k;
-            max = A_Matrix[k][k]; //Изначально задаём максимальный элемент - элемент глав. диаг.
-            if (fabs(max) < DBL_EPSILON) {
-                //Просматриваем столбец вниз под глав. диаг.
-                for (int i = k + 1; i < size; i++) {
-                    if (fabs(A_Matrix[i][k]) > fabs(max)) { //Если находим число больше по модулю - назначаем его максимальным элементом
-                        max = A_Matrix[i][k];
-                        index_max = i;
-                    }
-                }
-                //Из-за погрешности машинного вычисления с плавающей точкой, проверяем максимальный элемент на double_epsilon: 1.0 + DLB_EPSILON != 1.0
-                //Если этот элемент меньше - назначаем его равным 0
-                //Т.к. этот элемент максимальный в столбце под глав. диаг. (включая элемент глав. диаг.), то det(A) = 0 и однозначно невозможно найти корни СЛАУ
-                if (fabs(max) < DBL_EPSILON) {
-                    return 1;
-                }
-                //Если главный элемент столбца стоит ниже глав. диаг. - перестановка строк так, чтобы он стоял на глав. диаг.
-                if (index_max != k) {
-                    swap(A_Matrix[k], A_Matrix[index_max]);
-                    swap(B[k], B[index_max]);
-                }
-            }
-        }
+        if (fabs(A_Matrix[i][i]) < DBL_EPSILON) return 1;
     }
 }
 
@@ -227,7 +194,7 @@ void WritingToFile(int size, double eps, double** A_Matrix, double* B, double* X
 
         fout << endl << "Решение методом Якоби:" << endl;
         if (JacobiMethod(size, eps, A_Matrix, B, Xj, numberOfIteration) == 1) {
-            fout << "Превышен максимум итераций метода Якоби (50000), нет схождения";
+            fout << "Превышен максимум итераций метода Якоби (10000), нет схождения";
         }
         else {
             for (int i = 0; i < size; i++) {
@@ -244,7 +211,7 @@ void WritingToFile(int size, double eps, double** A_Matrix, double* B, double* X
 
         fout << endl << "Решение методом Зейделя:" << endl;
         if (SeidelMethod(size, eps, A_Matrix, B, Xs, numberOfIteration) == 1) {
-            fout << "Превышен максимум итераций метода Зейделя (50000), нет схождения";
+            fout << "Превышен максимум итераций метода Зейделя (10000), нет схождения";
         }
         else {
             for (int i = 0; i < size; i++) {
@@ -296,117 +263,16 @@ int main() {
         
         ArraySelecting(size, A_Matrix, B, Xj, Xs);
         RandomMatrix(size, A_Matrix, B);
-        if (ZeroOnDiagonal(size, A_Matrix, B) == 1) {
-            cout << "Невозможно получить решение, т.к. в исходной матрице коэффициентов есть нулевой столбец";
+        if (ZeroOnDiagonal(size, A_Matrix, B) != 1) {
+            WritingToFile(size, eps, A_Matrix, B, Xj, Xs, initialApproximation, numberOfIteration);
         }
-        else WritingToFile(size, eps, A_Matrix, B, Xj, Xs, initialApproximation, numberOfIteration);
-        /*cout << "Сгенгерированная матрица А:" << endl;
-        for (int i = 0; i < size; i++) {
-            for (int j = 0; j < size; j++) {
-                cout << A_Matrix[i][j] << " ";
-            }
-            cout << endl;
-        }
-        cout << endl << "Сгенерированный столбец свободных членов:" << endl;
-        for (int i = 0; i < size; i++) {
-            cout << B[i] << endl;
-        }
-
-        for (int i = 0; i < size; i++) {
-            Xj[i] = initialApproximation;
-        }
-
-        try {
-            cout << endl << "Решение методом Якоби:" << endl;
-            if (JacobiMethod(size, eps, A_Matrix, B, Xj, numberOfIteration) == 1) {
-                throw string("Превышен максимум итераций метода Якоби (50000), нет схождения");
-            }
-            for (int i = 0; i < size; i++) {
-                cout << Xj[i] << endl;
-            }
-            cout << "Число итераций: " << numberOfIteration;
-        }
-        catch (string err_message) {
-            cerr << err_message << endl;
-        }
-
-        numberOfIteration = 0;
-        for (int i = 0; i < size; i++) {
-            Xs[i] = initialApproximation;
-        }
-
-        try {
-            cout << endl << "Решение методом Зейделя:" << endl;
-            if (SeidelMethod(size, eps, A_Matrix, B, Xs, numberOfIteration) == 1) {
-                throw string("Превышен максимум итераций метода Зейделя (50000), нет схождения");
-            }
-            for (int i = 0; i < size; i++) {
-                cout << Xs[i] << endl;
-            }
-            cout << "Число итераций: " << numberOfIteration;
-        }
-        catch (string err_message) {
-            cerr << err_message << endl;
-        }*/
     }
     
     if (IsRandom == "2") {
         ReadingFromFile(size, eps, initialApproximation, A_Matrix, B, Xj, Xs);
-        if (ZeroOnDiagonal(size, A_Matrix, B) == 1) {
-            cout << "Невозможно получить решение, т.к. в исходной матрице коэффициентов есть нулевой столбец";
+        if (ZeroOnDiagonal(size, A_Matrix, B) != 1) {
+            WritingToFile(size, eps, A_Matrix, B, Xj, Xs, initialApproximation, numberOfIteration);
         }
-        else WritingToFile(size, eps, A_Matrix, B, Xj, Xs, initialApproximation, numberOfIteration);
-        /*cout << "Матрица А:" << endl;
-        for (int i = 0; i < size; i++) {
-            for (int j = 0; j < size; j++) {
-                cout << A_Matrix[i][j] << " ";
-            }
-            cout << endl;
-        }
-        cout << endl << "Столбец свободных членов:" << endl;
-        for (int i = 0; i < size; i++) {
-            cout << B[i] << endl;
-        }
-        cout << endl << "Точность:" << eps <<  endl;
-        cout << "Начальное приближение: " << initialApproximation << endl;
-
-        cout << endl;
-        for (int i = 0; i < size; i++) {
-            Xj[i] = initialApproximation;
-        }
-
-        try {
-            cout << endl << "Решение методом Якоби:" << endl;
-            if (JacobiMethod(size, eps, A_Matrix, B, Xj, numberOfIteration) == 1) {
-                throw string("Превышен максимум итераций метода Якоби (50000), нет схождения");
-            }
-            for (int i = 0; i < size; i++) {
-                cout << Xj[i] << endl;
-            }
-            cout << "Число итераций: " << numberOfIteration;
-        }
-        catch (string err_message) {
-            cerr << err_message << endl;
-        }
-
-        numberOfIteration = 0;
-        for (int i = 0; i < size; i++) {
-            Xs[i] = initialApproximation;
-        }
-
-        try {
-            cout << endl << "Решение методом Зейделя:" << endl;
-            if (SeidelMethod(size, eps, A_Matrix, B, Xs, numberOfIteration) == 1) {
-                throw string("Превышен максимум итераций метода Зейделя (50000), нет схождения");
-            }
-            for (int i = 0; i < size; i++) {
-                cout << Xs[i] << endl;
-            }
-            cout << "Число итераций: " << numberOfIteration;
-        }
-        catch (string err_message) {
-            cerr << err_message << endl;
-        }*/
     }
 
     _getch();
