@@ -9,6 +9,7 @@ using namespace std;
 #define MAX_ITERATION 10000 //Максимальное кол-во итераций для методов
 #define RAND_MAX_ABS 10 //Максимальное значение (по модулю) генерируемого числа
 
+//Выделить место в памяти под массивы
 void ArraySelecting(int size, double**& A_Matrix, double*& B, double*& Xj, double*& Xs) {
     A_Matrix = new double* [size];
     for (int i = 0; i < size; i++) {
@@ -19,6 +20,7 @@ void ArraySelecting(int size, double**& A_Matrix, double*& B, double*& Xj, doubl
     Xs = new double[size];
 }
 
+//Рандомно заполнить матрицу с диагональным преобладанием
 void RandomMatrix(int size, double** A_Matrix, double* B) {
     srand(time(0));
     double tmp = 0;
@@ -38,6 +40,7 @@ void RandomMatrix(int size, double** A_Matrix, double* B) {
     }
 }
 
+//Коэффициент диагонального преобладания
 double DiagonalPredominance(int size, double** A_Matrix, int row) {
     double tmp = 0;
     for (int j = 0; j < size; j++) {
@@ -46,9 +49,10 @@ double DiagonalPredominance(int size, double** A_Matrix, int row) {
     return fabs(A_Matrix[row][row] / tmp);
 }
 
+//Вычисление нормы невязок
 double DiscrepanciesNorm(int size, double** A_Matrix, double* B, double* X) {
     double* discrepancies = new double[size]; //Вектор невязок
-    double tmp = 0.0;
+    double tmp = 0;
     for (int i = 0; i < size; i++) {
         discrepancies[i] = B[i];
         for (int j = 0; j < size; j++) {
@@ -61,6 +65,7 @@ double DiscrepanciesNorm(int size, double** A_Matrix, double* B, double* X) {
     return sqrt(tmp);
 }
 
+//Метод Якоби (возвращает 1, если превышено максимальное кол-во итераций)
 int JacobiMethod(int size, double eps, double** A_Matrix, double* B, double* Xj, int& numberOfIteration) {
     double* TempXj = new double[size];  
     do {
@@ -81,6 +86,7 @@ int JacobiMethod(int size, double eps, double** A_Matrix, double* B, double* Xj,
     return 0;
 }
 
+//Метод Зейделя (возвращает 1, если превышено максимальное кол-во итераций)
 int SeidelMethod(int size, double eps, double** A_Matrix, double* B, double* Xs, int& numberOfIteration) {
     do {
         for (int i = 0; i < size; i++) {
@@ -96,6 +102,7 @@ int SeidelMethod(int size, double eps, double** A_Matrix, double* B, double* Xs,
     return 0;
 }
 
+//Чтение из файла
 void ReadingFromFile(int& size, double& eps, double& initialApproximation, double**& A_Matrix, double*& B, double*& Xj, double*& Xs) {
     char temp; //Переменная для проверки файла
     //Чтение из файла
@@ -152,12 +159,14 @@ void ReadingFromFile(int& size, double& eps, double& initialApproximation, doubl
     }
 }
 
+//Проверка наличия нуля на главной диагонали (возвращает 1, если есть)
 int ZeroOnDiagonal(int size, double**& A_Matrix, double*& B) {
     for (int i = 0; i < size; i++) {
         if (fabs(A_Matrix[i][i]) < DBL_EPSILON) return 1;
     }
 }
 
+//Запись в файл
 void WritingToFile(int size, double eps, double** A_Matrix, double* B, double* Xj, double* Xs, double initialApproximation, int& numberOfIteration) {
     try {
         ofstream fout("output.txt");
@@ -242,6 +251,7 @@ int main() {
     int numberOfIteration = 0; //Кол-во итераций
     string IsRandom, method;
 
+    //Выбор метода запоолнения матриц
     do {
         system("cls");
         cout << "Автоматически генерировать элементы матрицы?" << endl;
@@ -249,7 +259,7 @@ int main() {
         cin >> IsRandom;
     } while (IsRandom != "1" && IsRandom != "2");
     
-    if (IsRandom == "1") {
+    if (IsRandom == "1") { //Генерировать матрицу
         do {
             cout << "Введите размерность матрицы: ";
             cin >> size;
@@ -268,7 +278,7 @@ int main() {
         }
     }
     
-    if (IsRandom == "2") {
+    if (IsRandom == "2") { //Взять матрицу из файла
         ReadingFromFile(size, eps, initialApproximation, A_Matrix, B, Xj, Xs);
         if (ZeroOnDiagonal(size, A_Matrix, B) != 1) {
             WritingToFile(size, eps, A_Matrix, B, Xj, Xs, initialApproximation, numberOfIteration);
